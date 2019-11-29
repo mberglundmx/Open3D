@@ -443,6 +443,8 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     auto pcd = std::make_shared<PointCloud>();
     pcd->points_.resize(number_of_points);
+    pcd->tidx_.resize(number_of_points);
+    pcd->area_.resize(number_of_points);
     if (has_vert_normal) {
         pcd->normals_.resize(number_of_points);
     }
@@ -450,9 +452,29 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
         pcd->colors_.resize(number_of_points);
     }
     size_t point_idx = 0;
+    size_t additional_points = 0;
     for (size_t tidx = 0; tidx < triangles_.size(); ++tidx) {
-        size_t n = size_t(std::round(triangle_areas[tidx] * number_of_points));
-        while (point_idx < n) {
+		size_t n = size_t(std::round(triangle_areas[tidx] * number_of_points)) + additional_points;
+		if (n < point_idx + 1)
+		{
+            int inc = (point_idx + 1) - n;
+            n += inc;
+            additional_points += inc;
+        }
+        size_t num_points = n - point_idx;
+		if (n > pcd->points_.size())
+		{
+            pcd->points_.resize(number_of_points + additional_points);
+            pcd->tidx_.resize(number_of_points + additional_points);
+            pcd->area_.resize(number_of_points + additional_points);
+            if (has_vert_normal) {
+                pcd->normals_.resize(number_of_points + additional_points);
+            }
+            if (has_vert_color) {
+                pcd->colors_.resize(number_of_points + additional_points);
+            }
+		}
+		while (point_idx < n) {
             double r1 = dist(mt);
             double r2 = dist(mt);
             double a = (1 - std::sqrt(r1));
@@ -473,6 +495,16 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
                                           b * vertex_colors_[triangle(1)] +
                                           c * vertex_colors_[triangle(2)];
             }
+
+			pcd->tidx_[point_idx] = tidx;
+            if (point_idx != 0)
+			{
+                pcd->area_[point_idx] = surface_area * (triangle_areas[tidx] - triangle_areas[tidx - 1]) / num_points;
+			}
+			else
+			{
+                pcd->area_[0] = surface_area * (triangle_areas[0]) / num_points;
+			}
 
             point_idx++;
         }

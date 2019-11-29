@@ -244,6 +244,8 @@ public:
     std::vector<Eigen::Vector3d> points_;
     std::vector<Eigen::Vector3d> normals_;
     std::vector<Eigen::Vector3d> colors_;
+    std::vector<size_t> tidx_;
+    std::vector<double> area_;
 };
 
 }  // namespace geometry
