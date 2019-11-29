@@ -53,6 +53,8 @@ TriangleMesh &TriangleMesh::Clear() {
     adjacency_list_.clear();
     triangle_uvs_.clear();
     texture_.Clear();
+    materialidx_.clear();
+    materials_.clear();
     return *this;
 }
 

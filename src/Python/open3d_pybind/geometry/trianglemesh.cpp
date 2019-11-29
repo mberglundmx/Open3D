@@ -423,7 +423,16 @@ void pybind_trianglemesh(py::module &m) {
                     "vertex_colors", &geometry::TriangleMesh::vertex_colors_,
                     "``float64`` array of shape ``(num_vertices, 3)``, "
                     "range ``[0, 1]`` , use ``numpy.asarray()`` to access "
-                    "data: RGB colors of vertices.")
+                    "data: RGB colors of vertices.") 
+            .def_readwrite("material_idx", &geometry::TriangleMesh::materialidx_,
+                   "``uint`` array of shape ``(num_triangles)``, use "
+                   "``numpy.asarray()`` to access data: List of "
+                   "material idx for triangles.")
+            .def_readwrite("materials",
+                           &geometry::TriangleMesh::materials_,
+                           "``string`` array of shape ``(num_triangles)``, use "
+                           "``numpy.asarray()`` to access data: List of "
+                           "material names.")
             .def_readwrite("triangles", &geometry::TriangleMesh::triangles_,
                            "``int`` array of shape ``(num_triangles, 3)``, use "
                            "``numpy.asarray()`` to access data: List of "

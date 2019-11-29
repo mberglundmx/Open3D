@@ -53,7 +53,10 @@ bool ReadTriangleMeshFromOBJ(const std::string& filename,
     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
                                 filename.c_str(), mtl_base_path.c_str());
 
-    if (!warn.empty()) {
+    utility::LogInfo("Read OBJ materials: {}", materials.size());
+    utility::LogInfo("Base location: {}", mtl_base_path.c_str());
+
+	if (!warn.empty()) {
         utility::LogWarning("Read OBJ failed: {}", warn);
     }
     if (!err.empty()) {
@@ -127,6 +130,8 @@ bool ReadTriangleMeshFromOBJ(const std::string& filename,
                     mesh.triangle_uvs_.push_back(Eigen::Vector2d(tx, ty));
                 }
             }
+            mesh.materialidx_.push_back(
+                    shapes[s].mesh.material_ids[f]);
             mesh.triangles_.push_back(facet);
             index_offset += fv;
         }
@@ -154,6 +159,7 @@ bool ReadTriangleMeshFromOBJ(const std::string& filename,
                                       ->FlipVertical());
             break;
         }
+        mesh.materials_.push_back(material.name);
     }
 
     return true;

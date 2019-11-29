@@ -615,6 +615,8 @@ public:
     std::vector<Eigen::Vector3d> triangle_normals_;
     std::vector<std::unordered_set<int>> adjacency_list_;
     std::vector<Eigen::Vector2d> triangle_uvs_;
+    std::vector<int> materialidx_;
+    std::vector<std::string> materials_;
     Image texture_;
 };
 
