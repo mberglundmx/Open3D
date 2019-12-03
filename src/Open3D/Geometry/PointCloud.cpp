@@ -44,6 +44,7 @@ PointCloud &PointCloud::Clear() {
     colors_.clear();
     tidx_.clear();
     area_.clear();
+    corners_.clear();
     return *this;
 }
 

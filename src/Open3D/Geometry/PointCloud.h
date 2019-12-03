@@ -245,7 +245,8 @@ public:
     std::vector<Eigen::Vector3d> normals_;
     std::vector<Eigen::Vector3d> colors_;
     std::vector<size_t> tidx_;
-    std::vector<double> area_;
+    std::vector<float> area_;
+    std::vector<float> corners_;
 };
 
 }  // namespace geometry

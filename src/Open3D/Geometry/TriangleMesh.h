@@ -309,6 +309,10 @@ public:
     std::shared_ptr<PointCloud> SamplePointsUniformly(
             size_t number_of_points) const;
 
+	// Function to sample edge points with maximum distance \param max_distance
+    std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(
+            float max_distance);
+
     /// Function to sample \param number_of_points points (blue noise).
     /// Based on the method presented in Yuksel, "Sample Elimination for
     /// Generating Poisson Disk Sample Sets", EUROGRAPHICS, 2015 The PointCloud

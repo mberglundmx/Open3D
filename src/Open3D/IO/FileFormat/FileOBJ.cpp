@@ -53,9 +53,6 @@ bool ReadTriangleMeshFromOBJ(const std::string& filename,
     bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
                                 filename.c_str(), mtl_base_path.c_str());
 
-    utility::LogInfo("Read OBJ materials: {}", materials.size());
-    utility::LogInfo("Base location: {}", mtl_base_path.c_str());
-
 	if (!warn.empty()) {
         utility::LogWarning("Read OBJ failed: {}", warn);
     }

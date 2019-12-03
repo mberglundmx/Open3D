@@ -235,12 +235,16 @@ void pybind_trianglemesh(py::module &m) {
                          const geometry::OrientedBoundingBox &) const) &
                          geometry::TriangleMesh::Crop,
                  "Function to crop input TriangleMesh into output TriangleMesh",
-                 "bounding_box"_a)
+                 "bounding_box"_a) 
             .def("sample_points_uniformly",
                  &geometry::TriangleMesh::SamplePointsUniformly,
                  "Function to uniformly sample points from the mesh.",
                  "number_of_points"_a = 100)
-            .def("sample_points_poisson_disk",
+	        .def("sample_edge_points",
+                 &geometry::TriangleMesh::SampleEdgePoints,
+                "Function to sample points from the mesh edges.",
+                "max_distance"_a = 16)
+		    .def("sample_points_poisson_disk",
                  &geometry::TriangleMesh::SamplePointsPoissonDisk,
                  "Function to sample points from the mesh, where each point "
                  "has "

@@ -208,6 +208,10 @@ void pybind_pointcloud(py::module &m) {
                            "``uint`` array of shape ``(num_points)``, "
                            "use ``numpy.asarray()`` to access data: Points "
                            "corresponding triangle indexes.")
+            .def_readwrite("corners", &geometry::PointCloud::corners_,
+                           "``float`` array of shape ``(num_points)``, "
+                           "use ``numpy.asarray()`` to access data: Corner "
+                           "points corresponding angles.")
             .def_readwrite("area", &geometry::PointCloud::area_,
                            "``float64`` array of shape ``(num_points)``, "
                            "use ``numpy.asarray()`` to access data: Points "

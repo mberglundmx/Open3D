@@ -456,16 +456,15 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
     size_t point_idx = 0;
     size_t additional_points = 0;
     for (size_t tidx = 0; tidx < triangles_.size(); ++tidx) {
-		size_t n = size_t(std::round(triangle_areas[tidx] * number_of_points)) + additional_points;
-		if (n < point_idx + 1)
-		{
+        size_t n = size_t(std::round(triangle_areas[tidx] * number_of_points)) +
+                   additional_points;
+        if (n < point_idx + 1) {
             int inc = (point_idx + 1) - n;
             n += inc;
             additional_points += inc;
         }
         size_t num_points = n - point_idx;
-		if (n > pcd->points_.size())
-		{
+        if (n > pcd->points_.size()) {
             pcd->points_.resize(number_of_points + additional_points);
             pcd->tidx_.resize(number_of_points + additional_points);
             pcd->area_.resize(number_of_points + additional_points);
@@ -475,8 +474,8 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
             if (has_vert_color) {
                 pcd->colors_.resize(number_of_points + additional_points);
             }
-		}
-		while (point_idx < n) {
+        }
+        while (point_idx < n) {
             double r1 = dist(mt);
             double r2 = dist(mt);
             double a = (1 - std::sqrt(r1));
@@ -498,20 +497,120 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
                                           c * vertex_colors_[triangle(2)];
             }
 
-			pcd->tidx_[point_idx] = tidx;
-            if (point_idx != 0)
-			{
-                pcd->area_[point_idx] = surface_area * (triangle_areas[tidx] - triangle_areas[tidx - 1]) / num_points;
-			}
-			else
-			{
+            pcd->tidx_[point_idx] = tidx;
+            if (point_idx != 0) {
+                pcd->area_[point_idx] =
+                        surface_area *
+                        (triangle_areas[tidx] - triangle_areas[tidx - 1]) /
+                        num_points;
+            } else {
                 pcd->area_[0] = surface_area * (triangle_areas[0]) / num_points;
-			}
+            }
 
             point_idx++;
         }
     }
 
+    return pcd;
+}
+
+std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
+    auto const min_angle = 0.15;
+
+    if (max_distance <= 0) {
+        utility::LogError("[SampleEdgePoints] max_distance <= 0");
+    }
+    if (triangles_.size() == 0) {
+        utility::LogError("[SampleEdgePoints] input mesh has no triangles");
+    }
+
+    if (!HasTriangleNormals()) {
+        utility::LogWarning("Computing triangle normals");
+        ComputeTriangleNormals();
+    }
+    auto pcd = std::make_shared<PointCloud>();
+    bool has_vert_color = HasVertexColors();
+
+    // Find manifold edges
+    auto edges_to_triangles = GetEdgeToTrianglesMap();
+	
+    for (auto &kv : edges_to_triangles) {
+        size_t n_edge_triangle_refs = kv.second.size();
+        // check if the given edge is manifold
+        // (has exactly 2 adjacent triangles
+        // (we are skipping manifold edges with only one triangle))
+
+        if (n_edge_triangle_refs == 2u) {
+            auto normal0 = triangle_normals_[kv.second[0]];
+            auto normal1 = triangle_normals_[kv.second[1]];
+            auto angle_between_triangle_normals = acos(normal0.dot(-normal1));
+            if (angle_between_triangle_normals < min_angle || (angle_between_triangle_normals > M_PI - min_angle && angle_between_triangle_normals < M_PI + min_angle)) {
+                continue;
+            }
+
+            const auto &triangle0 = triangles_[kv.second[0]];
+            const auto &triangle1 = triangles_[kv.second[1]];
+
+            auto tri0_center =
+                    (vertices_[triangle0(0)] + vertices_[triangle0(1)] +
+                     vertices_[triangle0(2)]) /
+                    3;
+            auto tri1_center =
+                    (vertices_[triangle1(0)] + vertices_[triangle1(1)] +
+                     vertices_[triangle1(2)]) /
+                    3;
+
+            auto edge_center =
+                    (vertices_[kv.first[0]] + vertices_[kv.first[1]]) / 2;
+
+            auto edge_vector = (vertices_[kv.first[0]] - vertices_[kv.first[1]])
+                                       .normalized();
+
+            // Calculate vector from triangle midpoints to edge
+            auto vec0 = edge_center - tri0_center;
+            auto vec1 = edge_center - tri1_center;
+
+            // Project vec0 and vec1 to edge plane
+            auto edge_plane = Eigen::Hyperplane<double, 3>::Hyperplane(
+                    edge_vector, edge_center);
+
+            auto vec0_proj = edge_plane.projection(vec0).normalized();
+            auto vec1_proj = edge_plane.projection(vec1).normalized();
+
+            auto edge_normal = (vec0_proj + vec1_proj).normalized();
+
+            // Calculate angle between edge normal and plane
+            auto angle = acos(edge_normal.dot(-vec1_proj));
+            //auto angle = M_PI - atan2((vec0_proj.cross(vec1_proj)).norm(),
+            //                          vec0_proj.dot(vec1_proj));
+
+            if (abs(angle) < min_angle) {
+                continue;
+			}
+            auto distance =
+                    (vertices_[kv.first[1]] - vertices_[kv.first[0]])
+                            .norm();
+            auto offset = 1.0 * max_distance / 2;
+            if (offset > distance / 2) {
+                offset = distance / 2;
+            }
+
+            while (distance > offset) {
+                pcd->points_.push_back(vertices_[kv.first[1]] +
+                                        offset * edge_vector);
+                pcd->normals_.push_back(edge_normal);
+
+                if (has_vert_color) {
+                    // TODO: Add color
+                }
+
+                pcd->tidx_.push_back(kv.second[0]);
+                pcd->area_.push_back(0);
+                pcd->corners_.push_back(angle);
+	            offset += max_distance;
+            }
+        }
+    }
     return pcd;
 }
 
