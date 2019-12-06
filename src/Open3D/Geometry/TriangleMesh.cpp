@@ -99,6 +99,23 @@ TriangleMesh &TriangleMesh::operator+=(const TriangleMesh &mesh) {
                 "[TriangleMesh] copy of uvs and texture is not implemented "
                 "yet");
     }
+    for (size_t i = 0; i < add_tri_num; i++) {
+        bool found = false;
+        for (size_t mat_id = 0; mat_id < materials_.size() && !found;
+             mat_id++) {
+            utility::LogWarning("Comparing {} with {}", i, mat_id);
+            utility::LogWarning("Comparing {} with {}", materials_[mat_id], mesh.materials_[mesh.materialidx_[i]]);
+            if (materials_[mat_id].compare(
+                        mesh.materials_[mesh.materialidx_[i]])) {
+                found = true;
+                materialidx_[old_tri_num + i] = mat_id;
+            }
+        }
+        if (!found) {
+            materials_.push_back(mesh.materials_[mesh.materialidx_[i]]);
+            materialidx_[old_tri_num + i] = materials_.size() - 1;
+        }
+    }
     return (*this);
 }
 
@@ -445,6 +462,8 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
     std::uniform_real_distribution<double> dist(0.0, 1.0);
     auto pcd = std::make_shared<PointCloud>();
     pcd->points_.resize(number_of_points);
+    pcd->edges_.resize(number_of_points);
+    pcd->corners_.resize(number_of_points);
     pcd->tidx_.resize(number_of_points);
     pcd->area_.resize(number_of_points);
     if (has_vert_normal) {
@@ -468,6 +487,8 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
             pcd->points_.resize(number_of_points + additional_points);
             pcd->tidx_.resize(number_of_points + additional_points);
             pcd->area_.resize(number_of_points + additional_points);
+            pcd->edges_.resize(number_of_points + additional_points);
+            pcd->corners_.resize(number_of_points + additional_points);
             if (has_vert_normal) {
                 pcd->normals_.resize(number_of_points + additional_points);
             }
@@ -486,6 +507,10 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
             pcd->points_[point_idx] = a * vertices_[triangle(0)] +
                                       b * vertices_[triangle(1)] +
                                       c * vertices_[triangle(2)];
+            pcd->edges_[point_idx] =
+                    vertices_[triangle(0)] - vertices_[triangle(1)];
+            pcd->corners_[point_idx] = 0;
+
             if (has_vert_normal) {
                 pcd->normals_[point_idx] = a * vertex_normals_[triangle(0)] +
                                            b * vertex_normals_[triangle(1)] +
@@ -533,7 +558,7 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
 
     // Find manifold edges
     auto edges_to_triangles = GetEdgeToTrianglesMap();
-	
+
     for (auto &kv : edges_to_triangles) {
         size_t n_edge_triangle_refs = kv.second.size();
         // check if the given edge is manifold
@@ -544,7 +569,9 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
             auto normal0 = triangle_normals_[kv.second[0]];
             auto normal1 = triangle_normals_[kv.second[1]];
             auto angle_between_triangle_normals = acos(normal0.dot(-normal1));
-            if (angle_between_triangle_normals < min_angle || (angle_between_triangle_normals > M_PI - min_angle && angle_between_triangle_normals < M_PI + min_angle)) {
+            if (angle_between_triangle_normals < min_angle ||
+                (angle_between_triangle_normals > M_PI - min_angle &&
+                 angle_between_triangle_normals < M_PI + min_angle)) {
                 continue;
             }
 
@@ -581,15 +608,14 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
 
             // Calculate angle between edge normal and plane
             auto angle = acos(edge_normal.dot(-vec1_proj));
-            //auto angle = M_PI - atan2((vec0_proj.cross(vec1_proj)).norm(),
+            // auto angle = M_PI - atan2((vec0_proj.cross(vec1_proj)).norm(),
             //                          vec0_proj.dot(vec1_proj));
 
             if (abs(angle) < min_angle) {
                 continue;
-			}
+            }
             auto distance =
-                    (vertices_[kv.first[1]] - vertices_[kv.first[0]])
-                            .norm();
+                    (vertices_[kv.first[1]] - vertices_[kv.first[0]]).norm();
             auto offset = 1.0 * max_distance / 2;
             if (offset > distance / 2) {
                 offset = distance / 2;
@@ -597,8 +623,9 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
 
             while (distance > offset) {
                 pcd->points_.push_back(vertices_[kv.first[1]] +
-                                        offset * edge_vector);
+                                       offset * edge_vector);
                 pcd->normals_.push_back(edge_normal);
+                pcd->edges_.push_back(edge_vector);
 
                 if (has_vert_color) {
                     // TODO: Add color
@@ -607,7 +634,7 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
                 pcd->tidx_.push_back(kv.second[0]);
                 pcd->area_.push_back(0);
                 pcd->corners_.push_back(angle);
-	            offset += max_distance;
+                offset += max_distance;
             }
         }
     }

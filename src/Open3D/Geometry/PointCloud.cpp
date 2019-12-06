@@ -40,6 +40,7 @@ namespace geometry {
 
 PointCloud &PointCloud::Clear() {
     points_.clear();
+    edges_.clear();
     normals_.clear();
     colors_.clear();
     tidx_.clear();
@@ -112,9 +113,16 @@ PointCloud &PointCloud::operator+=(const PointCloud &cloud) {
     } else {
         colors_.clear();
     }
+    edges_.resize(new_vert_num);
+    for (size_t i = 0; i < add_vert_num; i++)
+        edges_[old_vert_num + i] = cloud.edges_[i];
     points_.resize(new_vert_num);
     for (size_t i = 0; i < add_vert_num; i++)
         points_[old_vert_num + i] = cloud.points_[i];
+    corners_.resize(new_vert_num);
+    for (size_t i = 0; i < add_vert_num; i++)
+        corners_[old_vert_num + i] = cloud.corners_[i];
+    tidx_.clear(); // triangle idx is undefined when point clouds are merged
     return (*this);
 }
 

@@ -204,6 +204,10 @@ void pybind_pointcloud(py::module &m) {
                            "``float64`` array of shape ``(num_points, 3)``, "
                            "use ``numpy.asarray()`` to access data: Points "
                            "coordinates.")
+            .def_readwrite("edges", &geometry::PointCloud::edges_,
+                           "``float64`` array of shape ``(num_points, 3)``, "
+                           "use ``numpy.asarray()`` to access data: Edge "
+                           "coordinates.")
             .def_readwrite("tidx", &geometry::PointCloud::tidx_,
                            "``uint`` array of shape ``(num_points)``, "
                            "use ``numpy.asarray()`` to access data: Points "
