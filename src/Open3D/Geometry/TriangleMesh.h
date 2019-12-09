@@ -300,14 +300,11 @@ public:
     /// Function to sample \param number_of_points points uniformly from the
     /// mesh
     std::shared_ptr<PointCloud> SamplePointsUniformlyImpl(
-            size_t number_of_points,
-            std::vector<double> &triangle_areas,
-            double surface_area) const;
+            float resolution) const;
 
     /// Function to sample \param number_of_points points uniformly from the
     /// mesh
-    std::shared_ptr<PointCloud> SamplePointsUniformly(
-            size_t number_of_points) const;
+    std::shared_ptr<PointCloud> SamplePointsUniformly(float resolution);
 
 	// Function to sample edge points with maximum distance \param max_distance
     std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(

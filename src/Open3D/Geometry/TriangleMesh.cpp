@@ -104,7 +104,8 @@ TriangleMesh &TriangleMesh::operator+=(const TriangleMesh &mesh) {
         for (size_t mat_id = 0; mat_id < materials_.size() && !found;
              mat_id++) {
             utility::LogWarning("Comparing {} with {}", i, mat_id);
-            utility::LogWarning("Comparing {} with {}", materials_[mat_id], mesh.materials_[mesh.materialidx_[i]]);
+            utility::LogWarning("Comparing {} with {}", materials_[mat_id],
+                                mesh.materials_[mesh.materialidx_[i]]);
             if (materials_[mat_id].compare(
                         mesh.materials_[mesh.materialidx_[i]])) {
                 found = true;
@@ -444,98 +445,86 @@ std::shared_ptr<TriangleMesh> TriangleMesh::FilterSmoothTaubin(
 }
 
 std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
-        size_t number_of_points,
-        std::vector<double> &triangle_areas,
-        double surface_area) const {
-    // triangle areas to cdf
-    triangle_areas[0] /= surface_area;
-    for (size_t tidx = 1; tidx < triangles_.size(); ++tidx) {
-        triangle_areas[tidx] =
-                triangle_areas[tidx] / surface_area + triangle_areas[tidx - 1];
-    }
-
+        float resolution) const {
     // sample point cloud
-    bool has_vert_normal = HasVertexNormals();
-    bool has_vert_color = HasVertexColors();
-    std::random_device rd;
-    std::mt19937 mt(rd());
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
     auto pcd = std::make_shared<PointCloud>();
-    pcd->points_.resize(number_of_points);
-    pcd->edges_.resize(number_of_points);
-    pcd->corners_.resize(number_of_points);
-    pcd->tidx_.resize(number_of_points);
-    pcd->area_.resize(number_of_points);
-    if (has_vert_normal) {
-        pcd->normals_.resize(number_of_points);
-    }
-    if (has_vert_color) {
-        pcd->colors_.resize(number_of_points);
-    }
+    std::vector<double> triangle_areas;
+    double surface_area = GetSurfaceArea(triangle_areas);
+
     size_t point_idx = 0;
-    size_t additional_points = 0;
     for (size_t tidx = 0; tidx < triangles_.size(); ++tidx) {
-        size_t n = size_t(std::round(triangle_areas[tidx] * number_of_points)) +
-                   additional_points;
-        if (n < point_idx + 1) {
-            int inc = (point_idx + 1) - n;
-            n += inc;
-            additional_points += inc;
+        const Eigen::Vector3i &triangle = triangles_[tidx];
+        // Find lengths of 2 vertices
+        auto ab = vertices_[triangle(1)] - vertices_[triangle(0)];
+        auto length_ab = ab.norm();
+        auto ac = vertices_[triangle(2)] - vertices_[triangle(0)];
+        auto length_ac = ac.norm();
+        auto bc = vertices_[triangle(2)] - vertices_[triangle(1)];
+        auto length_bc = bc.norm();
+        float l1, l2;
+        if (length_ab > length_ac && length_ab > length_bc) {
+            l1 = length_bc;
+            l2 = length_ac;
         }
-        size_t num_points = n - point_idx;
-        if (n > pcd->points_.size()) {
-            pcd->points_.resize(number_of_points + additional_points);
-            pcd->tidx_.resize(number_of_points + additional_points);
-            pcd->area_.resize(number_of_points + additional_points);
-            pcd->edges_.resize(number_of_points + additional_points);
-            pcd->corners_.resize(number_of_points + additional_points);
-            if (has_vert_normal) {
-                pcd->normals_.resize(number_of_points + additional_points);
-            }
-            if (has_vert_color) {
-                pcd->colors_.resize(number_of_points + additional_points);
+        if (length_ac > length_ab && length_ac > length_bc) {
+            l1 = length_ab;
+            l2 = length_bc;
+        }
+        if (length_bc > length_ac && length_bc > length_ab) {
+            l1 = length_ab;
+            l2 = length_ac;
+        }
+        auto num_r2 = ceil(l2 / resolution);
+        auto num_r1 = ceil(l1 / resolution);
+
+        auto dist_r1 = l1 / num_r1;
+        auto dist_r2 = l2 / num_r2;
+
+        auto offset_r1 = dist_r1 / 2;
+        auto offset_r2 = dist_r2 / 2;
+
+        auto count = 0;
+
+        for (float r1 = offset_r1; r1 < l1; r1 += dist_r1) {
+            for (float r2 = offset_r2; r2 < l2; r2 += dist_r2) {
+                if (r1 + r2 < (l1 + l2) / 2 - resolution / 2) {
+                    auto p = vertices_[triangle(0)] + r1 * ac.normalized() +
+                             r2 * ab.normalized();
+
+                    pcd->points_.push_back(p);
+                    pcd->edges_.push_back(vertices_[triangle(0)] -
+                                          vertices_[triangle(1)]);
+                    pcd->corners_.push_back(0);
+                    pcd->normals_.push_back(triangle_normals_[tidx]);
+                    pcd->tidx_.push_back(tidx);
+                    count++;
+                } else {
+                    break;
+                }
             }
         }
-        while (point_idx < n) {
-            double r1 = dist(mt);
-            double r2 = dist(mt);
-            double a = (1 - std::sqrt(r1));
-            double b = std::sqrt(r1) * (1 - r2);
-            double c = std::sqrt(r1) * r2;
 
-            const Eigen::Vector3i &triangle = triangles_[tidx];
-            pcd->points_[point_idx] = a * vertices_[triangle(0)] +
-                                      b * vertices_[triangle(1)] +
-                                      c * vertices_[triangle(2)];
-            pcd->edges_[point_idx] =
-                    vertices_[triangle(0)] - vertices_[triangle(1)];
-            pcd->corners_[point_idx] = 0;
+		if (count == 0) {
+            auto p = (vertices_[triangle(0)] + vertices_[triangle(1)] +
+                     vertices_[triangle(2)]) / 3;
 
-            if (has_vert_normal) {
-                pcd->normals_[point_idx] = a * vertex_normals_[triangle(0)] +
-                                           b * vertex_normals_[triangle(1)] +
-                                           c * vertex_normals_[triangle(2)];
-            }
-            if (has_vert_color) {
-                pcd->colors_[point_idx] = a * vertex_colors_[triangle(0)] +
-                                          b * vertex_colors_[triangle(1)] +
-                                          c * vertex_colors_[triangle(2)];
-            }
-
-            pcd->tidx_[point_idx] = tidx;
-            if (point_idx != 0) {
-                pcd->area_[point_idx] =
-                        surface_area *
-                        (triangle_areas[tidx] - triangle_areas[tidx - 1]) /
-                        num_points;
-            } else {
-                pcd->area_[0] = surface_area * (triangle_areas[0]) / num_points;
-            }
-
-            point_idx++;
+            pcd->points_.push_back(p);
+            pcd->edges_.push_back(vertices_[triangle(0)] -
+                                  vertices_[triangle(1)]);
+            pcd->corners_.push_back(0);
+            pcd->normals_.push_back(triangle_normals_[tidx]);
+            pcd->tidx_.push_back(tidx);
+            count++;
+		}
+        auto area = triangle_areas[tidx] / count;
+        for (int i = 0; i < count; i++) {
+            pcd->area_.push_back(area);
         }
+        
+        utility::LogWarning(
+                "Added {} points with area {} (total area {}, num*num {})",
+                count, area, triangle_areas[tidx], (num_r1 * num_r2));
     }
-
     return pcd;
 }
 
@@ -642,21 +631,14 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
 }
 
 std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformly(
-        size_t number_of_points) const {
-    if (number_of_points <= 0) {
-        utility::LogError("[SamplePointsUniformly] number_of_points <= 0");
-    }
+        float resolution) {
     if (triangles_.size() == 0) {
         utility::LogError(
                 "[SamplePointsUniformly] input mesh has no triangles");
     }
+    ComputeTriangleNormals();
 
-    // Compute area of each triangle and sum surface area
-    std::vector<double> triangle_areas;
-    double surface_area = GetSurfaceArea(triangle_areas);
-
-    return SamplePointsUniformlyImpl(number_of_points, triangle_areas,
-                                     surface_area);
+    return SamplePointsUniformlyImpl(resolution);
 }
 
 std::shared_ptr<PointCloud> TriangleMesh::SamplePointsPoissonDisk(
@@ -688,8 +670,11 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsPoissonDisk(
     // Compute init points using uniform sampling
     std::shared_ptr<PointCloud> pcl;
     if (pcl_init == nullptr) {
-        pcl = SamplePointsUniformlyImpl(size_t(init_factor * number_of_points),
-                                        triangle_areas, surface_area);
+        // pcl = SamplePointsUniformlyImpl(size_t(init_factor *
+        // number_of_points),
+        //                                triangle_areas, surface_area);
+        pcl = SamplePointsUniformlyImpl(surface_area /
+                                        (init_factor * number_of_points));
     } else {
         pcl = std::make_shared<PointCloud>();
         pcl->points_ = pcl_init->points_;
