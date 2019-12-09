@@ -454,6 +454,7 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
         float resolution) const {
     // sample point cloud
     auto pcd = std::make_shared<PointCloud>();
+    float margin = 0.1;  // Margin to triangle edge to not duplicate points
     std::vector<double> triangle_areas;
     double surface_area = GetSurfaceArea(triangle_areas);
 
@@ -493,27 +494,23 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
             l1 = length_ab;
             l2 = length_ac;
         }
-        auto num_r2 = ceil(l2 / resolution);
         auto num_r1 = ceil(l1 / resolution);
 
         auto dist_r1 = l1 / num_r1;
-        auto dist_r2 = l2 / num_r2;
 
         auto offset_r1 = dist_r1 / 2;
-        auto offset_r2 = dist_r2 / 2;
-
-        auto real_resolution =
-                sqrt(2.0 * triangle_areas[tidx] / (num_r1 * num_r2));
-
-        utility::LogWarning("Real resolution {}, nr1 {}, nr2 {}, area {}",
-                            real_resolution, num_r1, num_r2,
-                            triangle_areas[tidx]);
 
         auto count = 0;
 
         for (float r1 = offset_r1; r1 <= l1; r1 += dist_r1) {
+            auto max_r2 = ((l1 + l2) / 2) - r1;
+
+			auto num_r2 = ceil(max_r2 / resolution);
+            auto dist_r2 = max_r2 / num_r2;
+            auto offset_r2 = dist_r2 / 2;
+
             for (float r2 = offset_r2; r2 <= l2; r2 += dist_r2) {
-                if (r1 + r2 <= (l1 + l2) / 2 - real_resolution / 2) {
+                if (r1 + r2 <= (l1 + l2) / 2 - margin) {
                     auto p = p0 + r1 * e1.normalized() + r2 * e2.normalized();
 
                     pcd->points_.push_back(p);
@@ -610,6 +607,8 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
                 (angle_between_triangle_normals > M_PI - min_angle &&
                  angle_between_triangle_normals < M_PI + min_angle)) {
                 edge_normal = triangle_normals_[kv.second[0]];
+                continue;  // The area will be wrong if we put points on the
+                           // triangle edge
             } else {
                 // Calculate vector from triangle midpoints to edge
                 auto vec0 = edge_center - tri0_center;
@@ -617,15 +616,15 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
 
                 // Project vec0 and vec1 to edge plane
                 auto edge_plane = Eigen::Hyperplane<double, 3>::Hyperplane(
-                        edge_vector, edge_center);
+                        edge_vector, {0, 0, 0});
 
-                auto vec0_proj = edge_plane.projection(vec0).normalized();
-                auto vec1_proj = edge_plane.projection(vec1).normalized();
+                auto vec0_proj = edge_plane.projection(vec0);
+                auto vec1_proj = edge_plane.projection(vec1);
 
-                auto edge_normal = (vec0_proj + vec1_proj).normalized();
+                edge_normal = (vec0_proj + vec1_proj).normalized();
 
                 // Calculate angle between edge normal and plane
-                auto angle = acos(edge_normal.dot(-vec1_proj));
+                auto angle = acos(edge_normal.dot(-vec1_proj.normalized()));
                 // auto angle = M_PI -
                 // atan2((vec0_proj.cross(vec1_proj)).norm(),
                 //                          vec0_proj.dot(vec1_proj));
