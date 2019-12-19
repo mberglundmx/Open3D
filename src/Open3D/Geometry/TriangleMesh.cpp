@@ -100,13 +100,11 @@ TriangleMesh &TriangleMesh::operator+=(const TriangleMesh &mesh) {
                 "yet");
     }
     if (materials_.size() > 0 && mesh.materials_.size() > 0) {
+        materialidx_.resize(new_tri_num);
         for (size_t i = 0; i < add_tri_num; i++) {
             bool found = false;
             for (size_t mat_id = 0; mat_id < materials_.size() && !found;
                  mat_id++) {
-                utility::LogWarning("Comparing {} with {}", i, mat_id);
-                utility::LogWarning("Comparing {} with {}", materials_[mat_id],
-                                    mesh.materials_[mesh.materialidx_[i]]);
                 if (materials_[mat_id].compare(
                             mesh.materials_[mesh.materialidx_[i]])) {
                     found = true;
@@ -552,7 +550,7 @@ std::shared_ptr<PointCloud> TriangleMesh::SamplePointsUniformlyImpl(
 }
 
 std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
-    auto const min_angle = 0.15;
+    auto const min_angle = 0.01;
 
     if (max_distance <= 0) {
         utility::LogError("[SampleEdgePoints] max_distance <= 0");
@@ -624,12 +622,13 @@ std::shared_ptr<PointCloud> TriangleMesh::SampleEdgePoints(float max_distance) {
                 edge_normal = (vec0_proj + vec1_proj).normalized();
 
                 // Calculate angle between edge normal and plane
-                auto angle = acos(edge_normal.dot(-vec1_proj.normalized()));
+                angle = acos(edge_normal.dot(-vec1_proj.normalized()));
                 // auto angle = M_PI -
                 // atan2((vec0_proj.cross(vec1_proj)).norm(),
                 //                          vec0_proj.dot(vec1_proj));
                 if (abs(angle) < min_angle) {
                     angle = 0;
+                    continue;
                 }
             }
 
